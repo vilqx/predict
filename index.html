@@ -169,6 +169,15 @@
             currentDisplayName = nickname;
             currentPlayerKey = sanitizeKey(nickname);
             document.getElementById('username-display').textContent = nickname;
+
+            // LIVE BALANCE LISTENER (this was missing — now fixed)
+            const userRef = ref(db, `users/${currentPlayerKey}`);
+            onValue(userRef, (snap) => {
+                const data = snap.val();
+                if (data && data.balance !== undefined) {
+                    document.getElementById('balance').innerText = data.balance;
+                }
+            });
         }
 
         const marketsRef = ref(db, 'markets');
@@ -247,7 +256,7 @@
             });
         }
 
-        // ADMIN MODAL (fixed createElement version)
+        // ADMIN MODAL (createElement version)
         document.getElementById('admin-toggle').onclick = () => {
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay';
@@ -266,7 +275,6 @@
             const input = document.createElement('input');
             input.type = 'password';
             input.placeholder = 'Password';
-            input.autofocus = true;
 
             const btn = document.createElement('button');
             btn.textContent = 'Login';
@@ -312,12 +320,20 @@
                     <label><input type="checkbox" ${m.recurring?'checked':''} onchange="toggleRecurring('${id}', this.checked)"> Repeat daily</label>
                     ${m.status === 'open' ? `
                         <div style="margin-top:12px;">
-                            <button onclick="resolveMarket('${id}','yes')" style="background:#28a745;color:white;padding:8px 14px;border:none;border-radius:6px;margin-right:8px;">YES won</button>
-                            <button onclick="resolveMarket('${id}','no')" style="background:#dc3545;color:white;padding:8px 14px;border:none;border-radius:6px;">NO won</button>
+                            <button class="resolve-yes" data-id="${id}">YES won</button>
+                            <button class="resolve-no" data-id="${id}">NO won</button>
                         </div>
                     ` : ''}
                 `;
                 container.appendChild(div);
+            });
+
+            // Attach event listeners to resolve buttons (now using class + data-id for reliability)
+            document.querySelectorAll('.resolve-yes').forEach(btn => {
+                btn.onclick = () => resolveMarket(btn.dataset.id, 'yes');
+            });
+            document.querySelectorAll('.resolve-no').forEach(btn => {
+                btn.onclick = () => resolveMarket(btn.dataset.id, 'no');
             });
         }
 
@@ -326,27 +342,62 @@
             showNotification(val ? "Now repeats daily" : "Daily repeat disabled");
         };
 
-        window.resolveMarket = async (marketId, outcome) => {
-            if (!confirm(`Close market with ${outcome.toUpperCase()} winner?`)) return;
+        // RESOLVE WITH IN-PAGE CONFIRM MODAL (no browser confirm/alert)
+        window.resolveMarket = (marketId, outcome) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
 
-            await update(ref(db, `markets/${marketId}`), { status: "closed", outcome, closedAt: Date.now() });
+            const content = document.createElement('div');
+            content.className = 'modal-content';
 
-            let paid = 0;
-            const usersSnap = await get(ref(db, 'users'));
-            for (const [key, user] of Object.entries(usersSnap.val() || {})) {
-                if (user.bets?.[marketId]) {
-                    const bet = user.bets[marketId];
-                    if (bet.side === outcome && !bet.settled) {
-                        await update(ref(db, `users/${key}`), {
-                            balance: (user.balance || 0) + 100,
-                            [`bets/${marketId}/settled`]: true
-                        });
-                        paid++;
+            const close = document.createElement('span');
+            close.className = 'close-btn';
+            close.textContent = '×';
+            close.onclick = () => overlay.remove();
+
+            const title = document.createElement('h2');
+            title.textContent = 'Confirm Resolution';
+
+            const msg = document.createElement('p');
+            msg.textContent = `Close this market and declare ${outcome.toUpperCase()} the winner?`;
+
+            const yesBtn = document.createElement('button');
+            yesBtn.textContent = 'Yes, resolve';
+            yesBtn.style.background = '#28a745';
+
+            const noBtn = document.createElement('button');
+            noBtn.textContent = 'Cancel';
+            noBtn.style.background = '#dc3545';
+            noBtn.style.marginTop = '8px';
+
+            content.append(close, title, msg, yesBtn, noBtn);
+            overlay.appendChild(content);
+            document.body.appendChild(overlay);
+
+            yesBtn.onclick = async () => {
+                overlay.remove();
+
+                await update(ref(db, `markets/${marketId}`), { status: "closed", outcome, closedAt: Date.now() });
+
+                let paid = 0;
+                const usersSnap = await get(ref(db, 'users'));
+                for (const [key, user] of Object.entries(usersSnap.val() || {})) {
+                    if (user.bets?.[marketId]) {
+                        const bet = user.bets[marketId];
+                        if (bet.side === outcome && !bet.settled) {
+                            await update(ref(db, `users/${key}`), {
+                                balance: (user.balance || 0) + 100,
+                                [`bets/${marketId}/settled`]: true
+                            });
+                            paid++;
+                        }
                     }
                 }
-            }
-            showNotification(`Closed — ${outcome.toUpperCase()} won! Paid 100 pts to ${paid} player(s).`);
-            renderAdminMarkets();
+                showNotification(`Closed — ${outcome.toUpperCase()} won! Paid 100 pts to ${paid} player(s).`);
+                renderAdminMarkets();
+            };
+
+            noBtn.onclick = () => overlay.remove();
         };
 
         document.getElementById('create-market-btn').onclick = async () => {
