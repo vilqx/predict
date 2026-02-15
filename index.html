@@ -19,7 +19,7 @@
         #admin-panel { display:none; margin:30px 0; padding:20px; background:#fff3cd; border:1px solid #ffeeba; border-radius:12px; }
         .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.65); display:flex; align-items:center; justify-content:center; z-index:9999; }
         .modal-content { background:white; padding:28px; border-radius:12px; width:340px; text-align:center; box-shadow:0 8px 25px rgba(0,0,0,0.3); position:relative; }
-        .modal-content input { width:100%; padding:12px; font-size:18px; margin:12px 0; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; }
+        .modal-content input { width:100%; padding:12px; font-size:18px; margin:8px 0; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; }
         .modal-content button { width:100%; padding:14px; font-size:18px; background:#007bff; color:white; border:none; border-radius:6px; cursor:pointer; margin-top:8px; }
         .close-btn { position:absolute; top:10px; right:12px; font-size:28px; cursor:pointer; color:#999; line-height:1; }
         .notification { position:fixed; top:16px; left:50%; transform:translateX(-50%); background:#333; color:white; padding:12px 24px; border-radius:8px; z-index:10000; max-width:90%; text-align:center; box-shadow:0 4px 12px rgba(0,0,0,0.3); opacity:0; transition:opacity .4s; }
@@ -124,7 +124,7 @@
             await set(lastRef, today);
         }
 
-        async function promptNickname() {
+        async function promptLogin() {
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay';
 
@@ -137,66 +137,88 @@
             close.onclick = () => overlay.remove();
 
             const title = document.createElement('h2');
-            title.textContent = 'Enter Your Nickname';
+            title.textContent = 'Login / Sign Up';
 
             const desc = document.createElement('p');
-            desc.textContent = 'Use a unique nickname (e.g. FergusK). If it exists, you\'ll load your points. If not, a new account will be created.';
+            desc.textContent = 'Enter your nickname and password. New here? Just make one up — it will create your account.';
 
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.placeholder = 'Your nickname';
+            const nickInput = document.createElement('input');
+            nickInput.type = 'text';
+            nickInput.placeholder = 'Nickname';
+
+            const pwInput = document.createElement('input');
+            pwInput.type = 'password';
+            pwInput.placeholder = 'Password';
 
             const btn = document.createElement('button');
-            btn.textContent = 'Join';
+            btn.textContent = 'Enter';
 
             const error = document.createElement('p');
             error.style.color = '#dc3545';
             error.style.marginTop = '12px';
 
-            content.append(close, title, desc, input, btn, error);
+            content.append(close, title, desc, nickInput, pwInput, btn, error);
             overlay.appendChild(content);
             document.body.appendChild(overlay);
 
-            const forceFocus = () => { input.focus(); input.select(); };
-            setTimeout(forceFocus, 10);
+            const forceFocus = () => { nickInput.focus(); };
             setTimeout(forceFocus, 100);
-            setTimeout(forceFocus, 300);
 
             return new Promise(resolve => {
-                const tryJoin = async () => {
-                    let val = input.value.trim();
-                    if (val.length < 3) {
-                        error.textContent = "At least 3 characters";
+                const tryLogin = async () => {
+                    const nick = nickInput.value.trim();
+                    const pw = pwInput.value;
+
+                    if (nick.length < 3) {
+                        error.textContent = "Nickname must be at least 3 characters";
                         return;
                     }
-                    const key = sanitizeKey(val);
-                    const userSnap = await get(ref(db, `users/${key}`));
-                    if (!userSnap.exists()) {
-                        // Create new user
-                        await set(ref(db, `users/${key}`), { balance: 500, bets: {}, displayName: val });
+                    if (pw.length < 4) {
+                        error.textContent = "Password must be at least 4 characters";
+                        return;
+                    }
+
+                    const key = sanitizeKey(nick);
+                    const userRef = ref(db, `users/${key}`);
+                    const snap = await get(userRef);
+
+                    if (snap.exists()) {
+                        const data = snap.val();
+                        if (data.password !== pw) {
+                            error.textContent = "Wrong password";
+                            return;
+                        }
+                        showNotification("Welcome back!");
+                    } else {
+                        // Create new account
+                        await set(userRef, {
+                            balance: 500,
+                            bets: {},
+                            displayName: nick,
+                            password: pw   // stored plain text (fine for fake points game)
+                        });
                         showNotification("New account created!");
                     }
-                    currentDisplayName = val;
+
+                    currentDisplayName = nick;
                     currentPlayerKey = key;
-                    document.getElementById('username-display').textContent = val;
+                    document.getElementById('username-display').textContent = nick;
                     document.getElementById('logout-btn').style.display = 'inline';
                     overlay.remove();
 
                     // Live balance listener
-                    onValue(ref(db, `users/${currentPlayerKey}`), snap => {
+                    onValue(userRef, snap => {
                         const data = snap.val();
                         if (data && data.balance !== undefined) {
                             document.getElementById('balance').innerText = data.balance;
-                        } else {
-                            document.getElementById('balance').innerText = '0';
                         }
                     });
 
                     resolve();
                 };
 
-                btn.onclick = tryJoin;
-                input.onkeydown = e => { if (e.key === 'Enter') tryJoin(); };
+                btn.onclick = tryLogin;
+                pwInput.onkeydown = e => { if (e.key === 'Enter') tryLogin(); };
             });
         }
 
@@ -207,7 +229,7 @@
             document.getElementById('username-display').textContent = '—';
             document.getElementById('logout-btn').style.display = 'none';
             document.getElementById('balance').innerText = '—';
-            promptNickname();
+            promptLogin();
         };
 
         const marketsRef = ref(db, 'markets');
@@ -244,8 +266,8 @@
 
         async function buy(marketId, side) {
             if (!currentPlayerKey) {
-                promptNickname();
-                return showNotification("Enter your nickname first");
+                await promptLogin();
+                return showNotification("Logged in — try betting again");
             }
             const m = currentMarkets[marketId];
             if (!m || m.status !== 'open') return showNotification("Market closed");
@@ -258,10 +280,6 @@
 
             const userRef = ref(db, `users/${currentPlayerKey}`);
             const userSnap = await get(userRef);
-            if (!userSnap.exists()) {
-                promptNickname();
-                return showNotification("Your account was reset — re-enter nickname");
-            }
             const balance = userSnap.val()?.balance || 0;
             if (balance < price) return showNotification("Not enough points!");
 
@@ -457,9 +475,9 @@
             renderAdminMarkets();
         };
 
-        // START — always prompt for nickname (no localStorage)
+        // START — always prompt for login
         (async () => {
-            await promptNickname();
+            await promptLogin();
             loadMarkets();
             loadLeaderboard();
             await checkDailyReset();
