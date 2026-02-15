@@ -8,6 +8,7 @@
         body { font-family: system-ui, sans-serif; background: #f0f2f5; margin:0; padding:15px; color:#333; }
         h1 { text-align:center; color:#1a3c6d; margin:10px 0 20px; font-size:2.1rem; }
         .player-info { position:absolute; top:12px; left:12px; font-size:13px; color:#555; background:rgba(255,255,255,0.7); padding:4px 10px; border-radius:6px; }
+        .logout-btn { margin-left:10px; font-size:11px; color:#721c24; cursor:pointer; text-decoration:underline; }
         .card { background:white; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,0.1); }
         .price { font-weight:bold; color:#2ecc71; }
         button { padding:14px 20px; font-size:16px; border:none; border-radius:8px; cursor:pointer; width:48%; margin:4px; }
@@ -27,10 +28,10 @@
 </head>
 <body>
 
-    <div class="player-info">Playing as: <span id="username-display">—</span></div>
+    <div class="player-info">Playing as: <span id="username-display">—</span><span id="logout-btn" class="logout-btn" style="display:none;">(Logout)</span></div>
     <h1>Stewart Betting Market</h1>
 
-    <div id="user-info"><h2>Points: <span id="balance">500</span></h2></div>
+    <div id="user-info"><h2>Points: <span id="balance">—</span></h2></div>
 
     <h3>Active Markets</h3>
     <div id="markets-container"></div>
@@ -123,95 +124,91 @@
             await set(lastRef, today);
         }
 
-        async function initPlayer() {
-            let nickname = localStorage.getItem('playerNickname');
-            if (!nickname) {
-                // NICKNAME MODAL — createElement version (reliable typing on phone/iframe)
-                const overlay = document.createElement('div');
-                overlay.className = 'modal-overlay';
+        async function promptNickname() {
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
 
-                const content = document.createElement('div');
-                content.className = 'modal-content';
+            const content = document.createElement('div');
+            content.className = 'modal-content';
 
-                const close = document.createElement('span');
-                close.className = 'close-btn';
-                close.textContent = '×';
-                close.onclick = () => overlay.remove();
+            const close = document.createElement('span');
+            close.className = 'close-btn';
+            close.textContent = '×';
+            close.onclick = () => overlay.remove();
 
-                const title = document.createElement('h2');
-                title.textContent = 'Welcome!';
+            const title = document.createElement('h2');
+            title.textContent = 'Enter Your Nickname';
 
-                const desc = document.createElement('p');
-                desc.textContent = 'Choose a unique nickname (e.g. FergusK):';
+            const desc = document.createElement('p');
+            desc.textContent = 'Use a unique nickname (e.g. FergusK). If it exists, you\'ll load your points. If not, a new account will be created.';
 
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.placeholder = 'Your nickname';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.placeholder = 'Your nickname';
 
-                const btn = document.createElement('button');
-                btn.textContent = 'Join Game';
+            const btn = document.createElement('button');
+            btn.textContent = 'Join';
 
-                const error = document.createElement('p');
-                error.style.color = '#dc3545';
-                error.style.marginTop = '12px';
+            const error = document.createElement('p');
+            error.style.color = '#dc3545';
+            error.style.marginTop = '12px';
 
-                content.append(close, title, desc, input, btn, error);
-                overlay.appendChild(content);
-                document.body.appendChild(overlay);
+            content.append(close, title, desc, input, btn, error);
+            overlay.appendChild(content);
+            document.body.appendChild(overlay);
 
-                const forceFocus = () => { input.focus(); input.select(); };
-                setTimeout(forceFocus, 10);
-                setTimeout(forceFocus, 100);
-                setTimeout(forceFocus, 300);
+            const forceFocus = () => { input.focus(); input.select(); };
+            setTimeout(forceFocus, 10);
+            setTimeout(forceFocus, 100);
+            setTimeout(forceFocus, 300);
 
-                return new Promise(resolve => {
-                    const tryJoin = async () => {
-                        let val = input.value.trim();
-                        if (val.length < 3) {
-                            error.textContent = "At least 3 characters";
-                            return;
+            return new Promise(resolve => {
+                const tryJoin = async () => {
+                    let val = input.value.trim();
+                    if (val.length < 3) {
+                        error.textContent = "At least 3 characters";
+                        return;
+                    }
+                    const key = sanitizeKey(val);
+                    const userSnap = await get(ref(db, `users/${key}`));
+                    if (!userSnap.exists()) {
+                        // Create new user
+                        await set(ref(db, `users/${key}`), { balance: 500, bets: {}, displayName: val });
+                        showNotification("New account created!");
+                    }
+                    currentDisplayName = val;
+                    currentPlayerKey = key;
+                    document.getElementById('username-display').textContent = val;
+                    document.getElementById('logout-btn').style.display = 'inline';
+                    overlay.remove();
+
+                    // Live balance listener
+                    onValue(ref(db, `users/${currentPlayerKey}`), snap => {
+                        const data = snap.val();
+                        if (data && data.balance !== undefined) {
+                            document.getElementById('balance').innerText = data.balance;
+                        } else {
+                            document.getElementById('balance').innerText = '0';
                         }
-                        const key = sanitizeKey(val);
-                        if (await get(ref(db, `users/${key}`)).then(s => s.exists())) {
-                            error.textContent = "Nickname taken";
-                            return;
-                        }
-                        nickname = val;
-                        localStorage.setItem('playerNickname', nickname);
-                        currentDisplayName = nickname;
-                        currentPlayerKey = key;
-                        await set(ref(db, `users/${key}`), { balance:500, bets:{}, displayName:nickname });
-                        document.getElementById('username-display').textContent = nickname;
-                        overlay.remove();
+                    });
 
-                        // Live balance listener
-                        onValue(ref(db, `users/${currentPlayerKey}`), snap => {
-                            const data = snap.val();
-                            if (data && data.balance !== undefined) {
-                                document.getElementById('balance').innerText = data.balance;
-                            }
-                        });
+                    resolve();
+                };
 
-                        resolve();
-                    };
-
-                    btn.onclick = tryJoin;
-                    input.onkeydown = e => { if (e.key === 'Enter') tryJoin(); };
-                });
-            }
-
-            currentDisplayName = nickname;
-            currentPlayerKey = sanitizeKey(nickname);
-            document.getElementById('username-display').textContent = nickname;
-
-            // Live balance listener for returning players
-            onValue(ref(db, `users/${currentPlayerKey}`), snap => {
-                const data = snap.val();
-                if (data && data.balance !== undefined) {
-                    document.getElementById('balance').innerText = data.balance;
-                }
+                btn.onclick = tryJoin;
+                input.onkeydown = e => { if (e.key === 'Enter') tryJoin(); };
             });
         }
+
+        // Logout
+        document.getElementById('logout-btn').onclick = () => {
+            currentPlayerKey = null;
+            currentDisplayName = null;
+            document.getElementById('username-display').textContent = '—';
+            document.getElementById('logout-btn').style.display = 'none';
+            document.getElementById('balance').innerText = '—';
+            promptNickname();
+        };
 
         const marketsRef = ref(db, 'markets');
         function loadMarkets() {
@@ -246,7 +243,10 @@
         });
 
         async function buy(marketId, side) {
-            if (!currentPlayerKey) return showNotification("Please set your nickname first");
+            if (!currentPlayerKey) {
+                promptNickname();
+                return showNotification("Enter your nickname first");
+            }
             const m = currentMarkets[marketId];
             if (!m || m.status !== 'open') return showNotification("Market closed");
 
@@ -258,6 +258,10 @@
 
             const userRef = ref(db, `users/${currentPlayerKey}`);
             const userSnap = await get(userRef);
+            if (!userSnap.exists()) {
+                promptNickname();
+                return showNotification("Your account was reset — re-enter nickname");
+            }
             const balance = userSnap.val()?.balance || 0;
             if (balance < price) return showNotification("Not enough points!");
 
@@ -453,8 +457,9 @@
             renderAdminMarkets();
         };
 
+        // START — always prompt for nickname (no localStorage)
         (async () => {
-            await initPlayer();
+            await promptNickname();
             loadMarkets();
             loadLeaderboard();
             await checkDailyReset();
