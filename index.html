@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mr. Placeholder's Predictions</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: system-ui, sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
+        .card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .price { font-weight: bold; color: #2ecc71; }
+        button { padding: 14px 20px; font-size: 16px; border: none; border-radius: 8px; cursor: pointer; width: 48%; margin: 4px; }
+        .btn-yes { background: #d4edda; color: #155724; }
+        .btn-no { background: #f8d7da; color: #721c24; }
+        #leaderboard div { background: white; padding: 10px; margin-bottom: 6px; border-radius: 8px; }
+        #admin-panel { display:none; margin-top:30px; padding:20px; background:#fff3cd; border:1px solid #ffeeba; border-radius:12px; }
+    </style>
+</head>
+<body>
+
+    <div id="user-info">
+        <h2>Points: <span id="balance">500</span></h2>
+    </div>
+
+    <h3>Active Markets</h3>
+    <div id="markets-container"></div>
+
+    <h3>Leaderboard</h3>
+    <div id="leaderboard"></div>
+
+    <button id="admin-toggle" style="position:fixed; bottom:10px; right:10px; font-size:12px; padding:6px 10px; background:#333; color:white; border:none; border-radius:4px; cursor:pointer;">
+      Admin
+    </button>
+
+    <div id="admin-panel">
+      <h3>Admin: Resolve Markets</h3>
+      <div id="admin-markets"></div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js";
+        import { getDatabase, ref, onValue, update, get, set } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBFBm8cCIWj-7d8j21IM_46ys8mi1kZwrQ",
+            authDomain: "betmarket-6f3e8.firebaseapp.com",
+            databaseURL: "https://betmarket-6f3e8-default-rtdb.firebaseio.com/",
+            projectId: "betmarket-6f3e8",
+            storageBucket: "betmarket-6f3e8.firebasestorage.app",
+            messagingSenderId: "299864337572",
+            appId: "1:299864337572:web:408d4690be25be9d7e8a31"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        let currentPlayerKey = null;
+        let currentDisplayName = null;
+        let currentMarkets = {};
+
+        const ADMIN_PASSWORD = "teacher2026";   // ← CHANGE THIS!
+
+        function sanitizeKey(str) {
+            return str.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+        }
+
+        async function initPlayer() {
+            let nickname = localStorage.getItem('playerNickname');
+
+            if (!nickname) {
+                do {
+                    nickname = (prompt("Enter a unique nickname for the leaderboard (e.g. AlexK or Jordan23):") || "").trim();
+                    if (!nickname) nickname = "Player" + Math.floor(Math.random() * 9999);
+                    
+                    const testKey = sanitizeKey(nickname);
+                    const exists = await get(ref(db, `users/${testKey}`)).then(s => s.exists());
+                    if (!exists) break;
+                    
+                    alert(`"${nickname}" is already taken. Choose another.`);
+                } while (true);
+
+                localStorage.setItem('playerNickname', nickname);
+            }
+
+            currentDisplayName = nickname;
+            currentPlayerKey = sanitizeKey(nickname);
+
+            const userRef = ref(db, `users/${currentPlayerKey}`);
+            const snap = await get(userRef);
+            if (!snap.exists()) {
+                await set(userRef, { balance: 500, bets: {}, displayName: nickname });
+            }
+
+            onValue(userRef, (snap) => {
+                const data = snap.val();
+                if (data) document.getElementById('balance').innerText = data.balance || 0;
+            });
+        }
+
+        const marketsRef = ref(db, 'markets');
+        function loadMarkets() {
+            onValue(marketsRef, (snap) => {
+                currentMarkets = snap.val() || {};
+                renderMarkets();
+                if (document.getElementById('admin-panel').style.display !== 'none') renderAdminMarkets();
+            });
+        }
+
+        function renderMarkets() {
+            const container = document.getElementById('markets-container');
+            container.innerHTML = '';
+            Object.keys(currentMarkets).forEach(id => {
+                const m = currentMarkets[id];
+                if (m.status !== 'open') return;
+                const div = document.createElement('div');
+                div.className = 'card';
+                div.innerHTML = `
+                    <h4>${m.question}</h4>
+                    <p>YES: <span class="price">${m.yesPrice || 50} pts</span> | NO: <span class="price">${m.noPrice || 50} pts</span></p>
+                    <button class="btn-yes" data-market="${id}" data-side="yes">Buy YES</button>
+                    <button class="btn-no" data-market="${id}" data-side="no">Buy NO</button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        document.getElementById('markets-container').addEventListener('click', e => {
+            if (e.target.tagName === 'BUTTON') {
+                const marketId = e.target.dataset.market;
+                const side = e.target.dataset.side;
+                if (marketId && side) buy(marketId, side);
+            }
+        });
+
+        async function buy(marketId, side) {
+            if (!currentPlayerKey) return alert("Nickname not set yet");
+            const m = currentMarkets[marketId];
+            if (!m || m.status !== 'open') return alert("Market not open");
+
+            const priceKey = side === 'yes' ? 'yesPrice' : 'noPrice';
+            const price = m[priceKey] || 50;
+            const userRef = ref(db, `users/${currentPlayerKey}`);
+            const betRef = ref(db, `users/${currentPlayerKey}/bets/${marketId}`);
+
+            const betSnap = await get(betRef);
+            if (betSnap.exists()) return alert("You already bet on this market!");
+
+            const userSnap = await get(userRef);
+            const userData = userSnap.val();
+            const balance = userData?.balance || 0;
+            if (balance < price) return alert("Not enough points!");
+
+            // price adjustment
+            const adjustment = Math.min(5, Math.max(2, Math.round(price / 15)));
+            const oppKey = side === 'yes' ? 'noPrice' : 'yesPrice';
+
+            await update(userRef, {
+                balance: balance - price,
+                [`bets/${marketId}`]: { side, paid: price, timestamp: Date.now() }
+            });
+
+            await update(ref(db, `markets/${marketId}`), {
+                [priceKey]: Math.min(90, Math.max(10, (m[priceKey] || 50) + adjustment)),
+                [oppKey]: Math.min(90, Math.max(10, (m[oppKey] || 50) - adjustment))
+            });
+
+            alert(`Bet placed on ${side.toUpperCase()} for ${price} pts!`);
+        }
+
+        function loadLeaderboard() {
+            onValue(ref(db, 'users'), (snap) => {
+                const users = snap.val() || {};
+                const sorted = Object.entries(users).sort((a, b) => (b[1].balance || 0) - (a[1].balance || 0));
+                let html = '';
+                sorted.forEach(([, data]) => {
+                    const name = data.displayName || 'Anonymous';
+                    html += `<div>${name} — ${data.balance || 0} pts</div>`;
+                });
+                document.getElementById('leaderboard').innerHTML = html || '<div>No players yet</div>';
+            });
+        }
+
+        // ADMIN
+        document.getElementById('admin-toggle').addEventListener('click', () => {
+            const entered = prompt("Enter admin password:");
+            if (entered === ADMIN_PASSWORD) {
+                document.getElementById('admin-panel').style.display = 'block';
+                renderAdminMarkets();
+            } else if (entered) alert("Wrong password");
+        });
+
+        function renderAdminMarkets() {
+            const container = document.getElementById('admin-markets');
+            container.innerHTML = '';
+            Object.keys(currentMarkets).forEach(id => {
+                const m = currentMarkets[id];
+                const statusText = m.status === 'open' ? 'Open' : `Closed — ${m.outcome?.toUpperCase() || '—'}`;
+                const div = document.createElement('div');
+                div.style.marginBottom = '16px'; div.style.padding = '12px'; div.style.background = '#f8f9fa'; div.style.borderRadius = '8px';
+                div.innerHTML = `
+                    <strong>${m.question}</strong><br>
+                    <small>Status: ${statusText}</small><br>
+                    <small>YES: ${m.yesPrice||50} | NO: ${m.noPrice||50}</small>
+                    ${m.status === 'open' ? `
+                        <div style="margin-top:10px;">
+                            <button onclick="resolveMarket('${id}', 'yes')" style="background:#28a745;color:white;padding:8px 12px;border:none;border-radius:6px;margin-right:8px;cursor:pointer;">YES won</button>
+                            <button onclick="resolveMarket('${id}', 'no')"  style="background:#dc3545;color:white;padding:8px 12px;border:none;border-radius:6px;cursor:pointer;">NO won</button>
+                        </div>
+                    ` : ''}
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        window.resolveMarket = async function(marketId, outcome) {
+            if (!confirm(`Close this market with ${outcome.toUpperCase()} as winner?`)) return;
+
+            await update(ref(db, `markets/${marketId}`), {
+                status: "closed",
+                outcome: outcome,
+                closedAt: Date.now()
+            });
+
+            // AUTO PAYOUT
+            const usersSnap = await get(ref(db, 'users'));
+            const users = usersSnap.val() || {};
+            let paidCount = 0;
+
+            for (const [key, user] of Object.entries(users)) {
+                if (user.bets && user.bets[marketId]) {
+                    const bet = user.bets[marketId];
+                    if (bet.side === outcome && !bet.settled) {
+                        const newBal = (user.balance || 0) + 100;
+                        await update(ref(db, `users/${key}`), {
+                            balance: newBal,
+                            [`bets/${marketId}/settled`]: true
+                        });
+                        paidCount++;
+                    }
+                }
+            }
+
+            alert(`Market closed — ${outcome.toUpperCase()} won!\nPaid 100 pts to ${paidCount} winner(s).`);
+            renderAdminMarkets();
+        };
+
+        // START
+        async function startApp() {
+            await initPlayer();
+            loadMarkets();
+            loadLeaderboard();
+        }
+        startApp().catch(console.error);
+    </script>
+</body>
+</html>
