@@ -20,7 +20,7 @@
         .modal-content { background:white; padding:28px; border-radius:12px; width:340px; text-align:center; box-shadow:0 8px 25px rgba(0,0,0,0.3); position:relative; }
         .modal-content input { width:100%; padding:12px; font-size:18px; margin:12px 0; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; }
         .modal-content button { width:100%; padding:14px; font-size:18px; background:#007bff; color:white; border:none; border-radius:6px; cursor:pointer; margin-top:8px; }
-        .close-btn { position:absolute; top:10px; right:12px; font-size:24px; cursor:pointer; color:#999; }
+        .close-btn { position:absolute; top:10px; right:12px; font-size:28px; cursor:pointer; color:#999; line-height:1; }
         .notification { position:fixed; top:16px; left:50%; transform:translateX(-50%); background:#333; color:white; padding:12px 24px; border-radius:8px; z-index:10000; max-width:90%; text-align:center; box-shadow:0 4px 12px rgba(0,0,0,0.3); opacity:0; transition:opacity .4s; }
         .notification.show { opacity:1; }
     </style>
@@ -107,8 +107,7 @@
             for (const [id, m] of Object.entries(currentMarkets)) {
                 if (m.recurring && m.status === 'closed') {
                     const newId = `${id}-${today.replace(/-/g,'')}`;
-                    const exists = await get(ref(db, `markets/${newId}`)).then(s => s.exists());
-                    if (!exists) {
+                    if (!(await get(ref(db, `markets/${newId}`))).exists()) {
                         await set(ref(db, `markets/${newId}`), {
                             question: `${m.question} (${formatDateDisplay(today)})`,
                             yesPrice: m.yesPrice || 50,
@@ -149,7 +148,7 @@
                         let val = input.value.trim();
                         if (val.length < 3) { error.textContent = "At least 3 characters"; return; }
                         const key = sanitizeKey(val);
-                        if (await get(ref(db, `users/${key}`)).then(s=>s.exists())) {
+                        if (await get(ref(db, `users/${key}`)).then(s => s.exists())) {
                             error.textContent = "Nickname taken";
                             return;
                         }
@@ -164,6 +163,7 @@
                     };
                     submit.onclick = tryJoin;
                     input.onkeydown = e => e.key === 'Enter' && tryJoin();
+                    setTimeout(() => input.focus(), 50);
                 });
             }
             currentDisplayName = nickname;
@@ -205,7 +205,6 @@
 
         async function buy(marketId, side) {
             if (!currentPlayerKey) return showNotification("Please set your nickname first");
-
             const m = currentMarkets[marketId];
             if (!m || m.status !== 'open') return showNotification("Market closed");
 
@@ -239,7 +238,7 @@
         function loadLeaderboard() {
             onValue(ref(db, 'users'), snap => {
                 const users = snap.val() || {};
-                const sorted = Object.entries(users).sort((a, b) => (b[1].balance || 0) - (a[1].balance || 0));
+                const sorted = Object.entries(users).sort((a, b) => (b[1].balance || 0) - (a[1].balance || 0));   // ← fixed here
                 let html = '';
                 sorted.forEach(([, data]) => {
                     html += `<div>${data.displayName || 'Anonymous'} — ${data.balance || 0} pts</div>`;
@@ -248,7 +247,7 @@
             });
         }
 
-        // ADMIN MODAL
+        // ADMIN LOGIN MODAL
         document.getElementById('admin-toggle').onclick = () => {
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay';
@@ -275,8 +274,10 @@
                     error.textContent = "Wrong password";
                 }
             };
+
             submit.onclick = tryLogin;
-            input.onkeydown = e => e.key === 'Enter' && tryLogin();
+            input.onkeydown = e => { if (e.key === 'Enter') tryLogin(); };
+            setTimeout(() => input.focus(), 100);   // ← this forces focus
         };
 
         function renderAdminMarkets() {
