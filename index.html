@@ -1,20 +1,129 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Mr. Placeholder's Predictions</title>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stewart Betting Market</title>
     <style>
-        body { font-family: system-ui, sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
-        .card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #f0f2f5;
+            margin: 0;
+            padding: 15px;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            color: #1a3c6d;
+            margin: 10px 0 20px;
+            font-size: 2.1rem;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
         .price { font-weight: bold; color: #2ecc71; }
-        button { padding: 14px 20px; font-size: 16px; border: none; border-radius: 8px; cursor: pointer; width: 48%; margin: 4px; }
+        button {
+            padding: 14px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 48%;
+            margin: 4px;
+        }
         .btn-yes { background: #d4edda; color: #155724; }
-        .btn-no { background: #f8d7da; color: #721c24; }
-        #leaderboard div { background: white; padding: 10px; margin-bottom: 6px; border-radius: 8px; }
-        #admin-panel { display:none; margin-top:30px; padding:20px; background:#fff3cd; border:1px solid #ffeeba; border-radius:12px; }
+        .btn-no  { background: #f8d7da; color: #721c24; }
+        #leaderboard div {
+            background: white;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+        }
+        #admin-toggle {
+            position: fixed;
+            bottom: 12px;
+            right: 12px;
+            font-size: 11px;
+            padding: 5px 9px;
+            background: rgba(51,51,51,0.75);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            opacity: 0.7;
+            z-index: 100;
+        }
+        #admin-panel {
+            display: none;
+            margin: 30px 0;
+            padding: 20px;
+            background: #fff3cd;
+            border: 1px solid #ffeeba;
+            border-radius: 12px;
+        }
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.65);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        .modal-content {
+            background: white;
+            padding: 28px;
+            border-radius: 12px;
+            max-width: 90%;
+            width: 380px;
+            text-align: center;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+        .modal-content input {
+            width: 100%;
+            padding: 12px;
+            font-size: 18px;
+            margin: 12px 0;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+        .modal-content button {
+            width: 100%;
+            padding: 14px;
+            font-size: 18px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .notification {
+            position: fixed;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            z-index: 10000;
+            max-width: 90%;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            opacity: 0;
+            transition: opacity 0.4s;
+        }
+        .notification.show { opacity: 1; }
     </style>
 </head>
 <body>
+
+    <h1>Stewart Betting Market</h1>
 
     <div id="user-info">
         <h2>Points: <span id="balance">500</span></h2>
@@ -26,14 +135,33 @@
     <h3>Leaderboard</h3>
     <div id="leaderboard"></div>
 
-    <button id="admin-toggle" style="position:fixed; bottom:10px; right:10px; font-size:12px; padding:6px 10px; background:#333; color:white; border:none; border-radius:4px; cursor:pointer;">
-      Admin
-    </button>
+    <button id="admin-toggle">Admin</button>
 
     <div id="admin-panel">
-      <h3>Admin: Resolve Markets</h3>
-      <div id="admin-markets"></div>
+        <h3>Admin Controls</h3>
+
+        <div style="margin:20px 0; padding:15px; background:#e9ecef; border-radius:8px;">
+            <h4>Create New Market</h4>
+            <textarea id="new-question" placeholder="Question (e.g. Will Mr. Stewart drink coffee today?)" rows="3" style="width:100%; padding:10px; margin-bottom:10px; border:1px solid #ccc; border-radius:6px;"></textarea>
+            <div style="display:flex; gap:12px; margin-bottom:12px;">
+                <div style="flex:1;">
+                    <label>YES starts at:</label>
+                    <input id="new-yesprice" type="number" value="50" min="10" max="90" style="width:100%; padding:8px; box-sizing:border-box;">
+                </div>
+                <div style="flex:1;">
+                    <label>NO starts at:</label>
+                    <input id="new-noprice" type="number" value="50" min="10" max="90" style="width:100%; padding:8px; box-sizing:border-box;">
+                </div>
+            </div>
+            <button id="create-market-btn" style="width:100%; padding:12px; background:#28a745; color:white; border:none; border-radius:6px; cursor:pointer; font-size:16px;">Create Market</button>
+            <p id="create-status" style="color:#155724; margin-top:10px; display:none;"></p>
+        </div>
+
+        <div id="admin-markets"></div>
     </div>
+
+    <!-- In-page notification -->
+    <div id="notification" class="notification"></div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js";
@@ -56,40 +184,79 @@
         let currentDisplayName = null;
         let currentMarkets = {};
 
-        const ADMIN_PASSWORD = "teacher2026";   // ← CHANGE THIS!
+        const ADMIN_PASSWORD = "teacher2026";  // ← CHANGE THIS
 
         function sanitizeKey(str) {
             return str.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+        }
+
+        function showNotification(message, duration = 3000) {
+            const el = document.getElementById('notification');
+            el.textContent = message;
+            el.classList.add('show');
+            setTimeout(() => el.classList.remove('show'), duration);
         }
 
         async function initPlayer() {
             let nickname = localStorage.getItem('playerNickname');
 
             if (!nickname) {
-                do {
-                    nickname = (prompt("Enter a unique nickname for the leaderboard (e.g. AlexK or Jordan23):") || "").trim();
-                    if (!nickname) nickname = "Player" + Math.floor(Math.random() * 9999);
-                    
-                    const testKey = sanitizeKey(nickname);
-                    const exists = await get(ref(db, `users/${testKey}`)).then(s => s.exists());
-                    if (!exists) break;
-                    
-                    alert(`"${nickname}" is already taken. Choose another.`);
-                } while (true);
+                return new Promise(resolve => {
+                    const overlay = document.createElement('div');
+                    overlay.className = 'modal-overlay';
+                    overlay.innerHTML = `
+                        <div class="modal-content">
+                            <h2>Welcome!</h2>
+                            <p>Choose a unique nickname for the leaderboard<br>(e.g. FergusK, Alex22):</p>
+                            <input id="nick-input" type="text" placeholder="Your nickname" autofocus>
+                            <button id="nick-submit">Join Game</button>
+                            <p id="nick-error" style="color:#dc3545; margin-top:12px; min-height:24px;"></p>
+                        </div>
+                    `;
+                    document.body.appendChild(overlay);
 
-                localStorage.setItem('playerNickname', nickname);
+                    const input = document.getElementById('nick-input');
+                    const submit = document.getElementById('nick-submit');
+                    const error = document.getElementById('nick-error');
+
+                    const tryJoin = async () => {
+                        let val = input.value.trim();
+                        if (val.length < 3) {
+                            error.textContent = "Nickname must be at least 3 characters";
+                            return;
+                        }
+                        const key = sanitizeKey(val);
+                        const exists = await get(ref(db, `users/${key}`)).then(s => s.exists());
+                        if (exists) {
+                            error.textContent = "That nickname is taken — choose another";
+                            return;
+                        }
+
+                        nickname = val;
+                        localStorage.setItem('playerNickname', nickname);
+                        currentDisplayName = nickname;
+                        currentPlayerKey = key;
+
+                        await set(ref(db, `users/${key}`), {
+                            balance: 500,
+                            bets: {},
+                            displayName: nickname
+                        });
+
+                        overlay.remove();
+                        resolve();
+                    };
+
+                    submit.onclick = tryJoin;
+                    input.onkeydown = e => { if (e.key === 'Enter') tryJoin(); };
+                });
             }
 
             currentDisplayName = nickname;
             currentPlayerKey = sanitizeKey(nickname);
 
             const userRef = ref(db, `users/${currentPlayerKey}`);
-            const snap = await get(userRef);
-            if (!snap.exists()) {
-                await set(userRef, { balance: 500, bets: {}, displayName: nickname });
-            }
-
-            onValue(userRef, (snap) => {
+            onValue(userRef, snap => {
                 const data = snap.val();
                 if (data) document.getElementById('balance').innerText = data.balance || 0;
             });
@@ -97,10 +264,12 @@
 
         const marketsRef = ref(db, 'markets');
         function loadMarkets() {
-            onValue(marketsRef, (snap) => {
+            onValue(marketsRef, snap => {
                 currentMarkets = snap.val() || {};
                 renderMarkets();
-                if (document.getElementById('admin-panel').style.display !== 'none') renderAdminMarkets();
+                if (document.getElementById('admin-panel').style.display !== 'none') {
+                    renderAdminMarkets();
+                }
             });
         }
 
@@ -114,41 +283,41 @@
                 div.className = 'card';
                 div.innerHTML = `
                     <h4>${m.question}</h4>
-                    <p>YES: <span class="price">${m.yesPrice || 50} pts</span> | NO: <span class="price">${m.noPrice || 50} pts</span></p>
+                    <p>YES: <span class="price">${m.yesPrice || 50} pts</span>  |  NO: <span class="price">${m.noPrice || 50} pts</span></p>
                     <button class="btn-yes" data-market="${id}" data-side="yes">Buy YES</button>
-                    <button class="btn-no" data-market="${id}" data-side="no">Buy NO</button>
+                    <button class="btn-no"  data-market="${id}" data-side="no">Buy NO</button>
                 `;
                 container.appendChild(div);
             });
         }
 
         document.getElementById('markets-container').addEventListener('click', e => {
-            if (e.target.tagName === 'BUTTON') {
-                const marketId = e.target.dataset.market;
-                const side = e.target.dataset.side;
-                if (marketId && side) buy(marketId, side);
-            }
+            if (e.target.tagName !== 'BUTTON') return;
+            const marketId = e.target.dataset.market;
+            const side = e.target.dataset.side;
+            if (marketId && side) buy(marketId, side);
         });
 
         async function buy(marketId, side) {
-            if (!currentPlayerKey) return alert("Nickname not set yet");
+            if (!currentPlayerKey) return showNotification("Please set your nickname first");
+
             const m = currentMarkets[marketId];
-            if (!m || m.status !== 'open') return alert("Market not open");
+            if (!m || m.status !== 'open') return showNotification("This market is closed");
 
             const priceKey = side === 'yes' ? 'yesPrice' : 'noPrice';
             const price = m[priceKey] || 50;
-            const userRef = ref(db, `users/${currentPlayerKey}`);
+
             const betRef = ref(db, `users/${currentPlayerKey}/bets/${marketId}`);
+            if ((await get(betRef)).exists()) {
+                return showNotification("You have already placed a bet on this market");
+            }
 
-            const betSnap = await get(betRef);
-            if (betSnap.exists()) return alert("You already bet on this market!");
-
+            const userRef = ref(db, `users/${currentPlayerKey}`);
             const userSnap = await get(userRef);
-            const userData = userSnap.val();
-            const balance = userData?.balance || 0;
-            if (balance < price) return alert("Not enough points!");
+            const balance = userSnap.val()?.balance || 0;
 
-            // price adjustment
+            if (balance < price) return showNotification("Not enough points!");
+
             const adjustment = Math.min(5, Math.max(2, Math.round(price / 15)));
             const oppKey = side === 'yes' ? 'noPrice' : 'yesPrice';
 
@@ -162,47 +331,52 @@
                 [oppKey]: Math.min(90, Math.max(10, (m[oppKey] || 50) - adjustment))
             });
 
-            alert(`Bet placed on ${side.toUpperCase()} for ${price} pts!`);
+            showNotification(`Bet placed on ${side.toUpperCase()} for ${price} pts!`);
         }
 
         function loadLeaderboard() {
-            onValue(ref(db, 'users'), (snap) => {
+            onValue(ref(db, 'users'), snap => {
                 const users = snap.val() || {};
-                const sorted = Object.entries(users).sort((a, b) => (b[1].balance || 0) - (a[1].balance || 0));
+                const sorted = Object.entries(users).sort((a,b) => (b[1].balance||0) - (a[1].balance||0));
                 let html = '';
-                sorted.forEach(([, data]) => {
-                    const name = data.displayName || 'Anonymous';
-                    html += `<div>${name} — ${data.balance || 0} pts</div>`;
+                sorted.forEach(([,data]) => {
+                    html += `<div>${data.displayName || 'Anonymous'} — ${data.balance || 0} pts</div>`;
                 });
                 document.getElementById('leaderboard').innerHTML = html || '<div>No players yet</div>';
             });
         }
 
-        // ADMIN
-        document.getElementById('admin-toggle').addEventListener('click', () => {
-            const entered = prompt("Enter admin password:");
-            if (entered === ADMIN_PASSWORD) {
+        // ──────────────── ADMIN ────────────────
+
+        document.getElementById('admin-toggle').onclick = () => {
+            const pw = prompt("Enter admin password:");
+            if (pw === ADMIN_PASSWORD) {
                 document.getElementById('admin-panel').style.display = 'block';
                 renderAdminMarkets();
-            } else if (entered) alert("Wrong password");
-        });
+            } else if (pw) {
+                showNotification("Incorrect password");
+            }
+        };
 
         function renderAdminMarkets() {
             const container = document.getElementById('admin-markets');
             container.innerHTML = '';
             Object.keys(currentMarkets).forEach(id => {
                 const m = currentMarkets[id];
-                const statusText = m.status === 'open' ? 'Open' : `Closed — ${m.outcome?.toUpperCase() || '—'}`;
+                const statusText = m.status === 'open' ? 'Open' : `Closed — ${m.outcome?.toUpperCase() || '?'}`;
                 const div = document.createElement('div');
-                div.style.marginBottom = '16px'; div.style.padding = '12px'; div.style.background = '#f8f9fa'; div.style.borderRadius = '8px';
+                div.style.margin = '16px 0';
+                div.style.padding = '12px';
+                div.style.background = '#f8f9fa';
+                div.style.borderRadius = '8px';
                 div.innerHTML = `
                     <strong>${m.question}</strong><br>
                     <small>Status: ${statusText}</small><br>
-                    <small>YES: ${m.yesPrice||50} | NO: ${m.noPrice||50}</small>
+                    <small>YES ${m.yesPrice||50} | NO ${m.noPrice||50}</small>
                     ${m.status === 'open' ? `
-                        <div style="margin-top:10px;">
-                            <button onclick="resolveMarket('${id}', 'yes')" style="background:#28a745;color:white;padding:8px 12px;border:none;border-radius:6px;margin-right:8px;cursor:pointer;">YES won</button>
-                            <button onclick="resolveMarket('${id}', 'no')"  style="background:#dc3545;color:white;padding:8px 12px;border:none;border-radius:6px;cursor:pointer;">NO won</button>
+                        <div style="margin-top:12px;">
+                            <button onclick="resolveMarket('${id}','yes')" style="background:#28a745;color:white;padding:8px 14px;border:none;border-radius:6px;margin-right:8px;cursor:pointer;">YES won</button>
+                            <button onclick="resolveMarket('${id}','no')"  style="background:#dc3545;color:white;padding:8px 14px;border:none;border-radius:6px;cursor:pointer;">NO won</button>
                         </div>
                     ` : ''}
                 `;
@@ -210,45 +384,69 @@
             });
         }
 
-        window.resolveMarket = async function(marketId, outcome) {
-            if (!confirm(`Close this market with ${outcome.toUpperCase()} as winner?`)) return;
+        window.resolveMarket = async (marketId, outcome) => {
+            if (!confirm(`Close market with ${outcome.toUpperCase()} winner?`)) return;
 
             await update(ref(db, `markets/${marketId}`), {
                 status: "closed",
-                outcome: outcome,
+                outcome,
                 closedAt: Date.now()
             });
 
-            // AUTO PAYOUT
+            let paid = 0;
             const usersSnap = await get(ref(db, 'users'));
-            const users = usersSnap.val() || {};
-            let paidCount = 0;
-
-            for (const [key, user] of Object.entries(users)) {
-                if (user.bets && user.bets[marketId]) {
+            for (const [key, user] of Object.entries(usersSnap.val() || {})) {
+                if (user.bets?.[marketId]) {
                     const bet = user.bets[marketId];
                     if (bet.side === outcome && !bet.settled) {
-                        const newBal = (user.balance || 0) + 100;
                         await update(ref(db, `users/${key}`), {
-                            balance: newBal,
+                            balance: (user.balance || 0) + 100,
                             [`bets/${marketId}/settled`]: true
                         });
-                        paidCount++;
+                        paid++;
                     }
                 }
             }
 
-            alert(`Market closed — ${outcome.toUpperCase()} won!\nPaid 100 pts to ${paidCount} winner(s).`);
+            showNotification(`Closed — ${outcome.toUpperCase()} won! Paid 100 pts to ${paid} player(s).`);
             renderAdminMarkets();
         };
 
-        // START
-        async function startApp() {
+        // Create market
+        document.getElementById('create-market-btn').onclick = async () => {
+            const q = document.getElementById('new-question').value.trim();
+            let yp = parseInt(document.getElementById('new-yesprice').value) || 50;
+            let np = parseInt(document.getElementById('new-noprice').value) || 50;
+
+            if (!q) return showNotification("Enter a question");
+
+            let max = 0;
+            Object.keys(currentMarkets).forEach(k => {
+                if (k.startsWith('m')) max = Math.max(max, parseInt(k.slice(1)) || 0);
+            });
+            const id = `m${max+1}`;
+
+            await set(ref(db, `markets/${id}`), {
+                question: q,
+                yesPrice: yp,
+                noPrice: np,
+                status: "open",
+                createdAt: Date.now()
+            });
+
+            showNotification(`Market ${id} created!`);
+            document.getElementById('new-question').value = '';
+            document.getElementById('new-yesprice').value = '50';
+            document.getElementById('new-noprice').value = '50';
+            renderAdminMarkets();
+        };
+
+        // Start
+        (async () => {
             await initPlayer();
             loadMarkets();
             loadLeaderboard();
-        }
-        startApp().catch(console.error);
+        })();
     </script>
 </body>
 </html>
