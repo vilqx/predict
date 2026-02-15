@@ -17,9 +17,10 @@
         #admin-toggle { position:fixed; bottom:12px; right:12px; font-size:11px; padding:5px 9px; background:rgba(51,51,51,0.75); color:white; border:none; border-radius:6px; cursor:pointer; z-index:100; }
         #admin-panel { display:none; margin:30px 0; padding:20px; background:#fff3cd; border:1px solid #ffeeba; border-radius:12px; }
         .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.65); display:flex; align-items:center; justify-content:center; z-index:9999; }
-        .modal-content { background:white; padding:28px; border-radius:12px; width:340px; text-align:center; box-shadow:0 8px 25px rgba(0,0,0,0.3); }
+        .modal-content { background:white; padding:28px; border-radius:12px; width:340px; text-align:center; box-shadow:0 8px 25px rgba(0,0,0,0.3); position:relative; }
         .modal-content input { width:100%; padding:12px; font-size:18px; margin:12px 0; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; }
-        .modal-content button { width:100%; padding:14px; font-size:18px; background:#007bff; color:white; border:none; border-radius:6px; cursor:pointer; }
+        .modal-content button { width:100%; padding:14px; font-size:18px; background:#007bff; color:white; border:none; border-radius:6px; cursor:pointer; margin-top:8px; }
+        .close-btn { position:absolute; top:10px; right:12px; font-size:24px; cursor:pointer; color:#999; }
         .notification { position:fixed; top:16px; left:50%; transform:translateX(-50%); background:#333; color:white; padding:12px 24px; border-radius:8px; z-index:10000; max-width:90%; text-align:center; box-shadow:0 4px 12px rgba(0,0,0,0.3); opacity:0; transition:opacity .4s; }
         .notification.show { opacity:1; }
     </style>
@@ -29,9 +30,7 @@
     <div class="player-info">Playing as: <span id="username-display">—</span></div>
     <h1>Stewart Betting Market</h1>
 
-    <div id="user-info">
-        <h2>Points: <span id="balance">500</span></h2>
-    </div>
+    <div id="user-info"><h2>Points: <span id="balance">500</span></h2></div>
 
     <h3>Active Markets</h3>
     <div id="markets-container"></div>
@@ -44,7 +43,6 @@
     <div id="admin-panel">
         <h3>Admin Controls</h3>
 
-        <!-- Create new market -->
         <div style="margin:20px 0; padding:15px; background:#e9ecef; border-radius:8px;">
             <h4>Create New Market</h4>
             <textarea id="new-question" placeholder="Question..." rows="3" style="width:100%; padding:10px; margin-bottom:10px; border:1px solid #ccc; border-radius:6px;"></textarea>
@@ -64,7 +62,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js";
         import { getDatabase, ref, onValue, update, get, set } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-database.js";
 
-        const firebaseConfig = { /* your config */ 
+        const firebaseConfig = {
             apiKey: "AIzaSyBFBm8cCIWj-7d8j21IM_46ys8mi1kZwrQ",
             authDomain: "betmarket-6f3e8.firebaseapp.com",
             databaseURL: "https://betmarket-6f3e8-default-rtdb.firebaseio.com/",
@@ -81,7 +79,7 @@
         let currentDisplayName = null;
         let currentMarkets = {};
 
-        const ADMIN_PASSWORD = "teacher2026";   // ← CHANGE THIS
+        const ADMIN_PASSWORD = "teacher2026";
 
         function sanitizeKey(str) { return str.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_'); }
 
@@ -92,16 +90,14 @@
             setTimeout(() => el.classList.remove('show'), duration);
         }
 
-        // PST date helpers
         function getPSTDateString() {
             return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
         }
-        function formatDateDisplay(dateStr) { // "2026-02-15" → "Feb 15"
+        function formatDateDisplay(dateStr) {
             const [y,m,d] = dateStr.split('-');
             return new Date(y, m-1, d).toLocaleDateString('en-US', {month:'short', day:'numeric'});
         }
 
-        // Daily recurring reset
         async function checkDailyReset() {
             const today = getPSTDateString();
             const lastRef = ref(db, 'settings/lastDailyReset');
@@ -109,7 +105,7 @@
             if (lastSnap.val() === today) return;
 
             for (const [id, m] of Object.entries(currentMarkets)) {
-                if (m.recurring && m.status === 'closed') {   // only recreate from closed templates
+                if (m.recurring && m.status === 'closed') {
                     const newId = `${id}-${today.replace(/-/g,'')}`;
                     const exists = await get(ref(db, `markets/${newId}`)).then(s => s.exists());
                     if (!exists) {
@@ -128,7 +124,6 @@
             await set(lastRef, today);
         }
 
-        // Nickname modal (unchanged from last version)
         async function initPlayer() {
             let nickname = localStorage.getItem('playerNickname');
             if (!nickname) {
@@ -137,6 +132,7 @@
                     overlay.className = 'modal-overlay';
                     overlay.innerHTML = `
                         <div class="modal-content">
+                            <span class="close-btn" onclick="this.closest('.modal-overlay').remove()">×</span>
                             <h2>Welcome!</h2>
                             <p>Choose a unique nickname (e.g. FergusK):</p>
                             <input id="nick-input" type="text" placeholder="Your nickname" autofocus>
@@ -145,16 +141,16 @@
                         </div>`;
                     document.body.appendChild(overlay);
 
-                    const input = document.getElementById('nick-input');
-                    const submit = document.getElementById('nick-submit');
-                    const error = document.getElementById('nick-error');
+                    const input = overlay.querySelector('#nick-input');
+                    const submit = overlay.querySelector('#nick-submit');
+                    const error = overlay.querySelector('#nick-error');
 
                     const tryJoin = async () => {
                         let val = input.value.trim();
                         if (val.length < 3) { error.textContent = "At least 3 characters"; return; }
                         const key = sanitizeKey(val);
                         if (await get(ref(db, `users/${key}`)).then(s=>s.exists())) {
-                            error.textContent = "Nickname taken — choose another";
+                            error.textContent = "Nickname taken";
                             return;
                         }
                         nickname = val;
@@ -162,12 +158,12 @@
                         currentDisplayName = nickname;
                         currentPlayerKey = key;
                         await set(ref(db, `users/${key}`), { balance:500, bets:{}, displayName:nickname });
-                        overlay.remove();
                         document.getElementById('username-display').textContent = nickname;
+                        overlay.remove();
                         resolve();
                     };
                     submit.onclick = tryJoin;
-                    input.onkeydown = e => e.key==='Enter' && tryJoin();
+                    input.onkeydown = e => e.key === 'Enter' && tryJoin();
                 });
             }
             currentDisplayName = nickname;
@@ -175,7 +171,6 @@
             document.getElementById('username-display').textContent = nickname;
         }
 
-        // Markets
         const marketsRef = ref(db, 'markets');
         function loadMarkets() {
             onValue(marketsRef, snap => {
@@ -190,7 +185,7 @@
             container.innerHTML = '';
             Object.keys(currentMarkets).forEach(id => {
                 const m = currentMarkets[id];
-                if (m.status !== 'open' || m.recurring) return;   // hide templates
+                if (m.status !== 'open' || m.recurring) return;
                 const div = document.createElement('div');
                 div.className = 'card';
                 div.innerHTML = `
@@ -203,26 +198,63 @@
             });
         }
 
-        // Buy logic (same as before, using showNotification)
         document.getElementById('markets-container').addEventListener('click', e => {
             if (e.target.tagName !== 'BUTTON') return;
             buy(e.target.dataset.market, e.target.dataset.side);
         });
 
-        async function buy(marketId, side) { /* same as previous version, using showNotification */ 
-            // ... (copy the buy function from the last version I gave you)
-            // I kept it short here for space — paste the full buy() from before
+        async function buy(marketId, side) {
+            if (!currentPlayerKey) return showNotification("Please set your nickname first");
+
+            const m = currentMarkets[marketId];
+            if (!m || m.status !== 'open') return showNotification("Market closed");
+
+            const priceKey = side === 'yes' ? 'yesPrice' : 'noPrice';
+            const price = m[priceKey] || 50;
+
+            const betRef = ref(db, `users/${currentPlayerKey}/bets/${marketId}`);
+            if ((await get(betRef)).exists()) return showNotification("You already bet on this market");
+
+            const userRef = ref(db, `users/${currentPlayerKey}`);
+            const userSnap = await get(userRef);
+            const balance = userSnap.val()?.balance || 0;
+            if (balance < price) return showNotification("Not enough points!");
+
+            const adjustment = Math.min(5, Math.max(2, Math.round(price / 15)));
+            const oppKey = side === 'yes' ? 'noPrice' : 'yesPrice';
+
+            await update(userRef, {
+                balance: balance - price,
+                [`bets/${marketId}`]: { side, paid: price, timestamp: Date.now() }
+            });
+
+            await update(ref(db, `markets/${marketId}`), {
+                [priceKey]: Math.min(90, Math.max(10, (m[priceKey] || 50) + adjustment)),
+                [oppKey]: Math.min(90, Math.max(10, (m[oppKey] || 50) - adjustment))
+            });
+
+            showNotification(`Bet placed on ${side.toUpperCase()} for ${price} pts!`);
         }
 
-        // Leaderboard (same)
-        function loadLeaderboard() { /* same as before */ }
+        function loadLeaderboard() {
+            onValue(ref(db, 'users'), snap => {
+                const users = snap.val() || {};
+                const sorted = Object.entries(users).sort((a, b) => (b[1].balance || 0) - (a[1].balance || 0));
+                let html = '';
+                sorted.forEach(([, data]) => {
+                    html += `<div>${data.displayName || 'Anonymous'} — ${data.balance || 0} pts</div>`;
+                });
+                document.getElementById('leaderboard').innerHTML = html || '<div>No players yet</div>';
+            });
+        }
 
-        // ADMIN PASSWORD MODAL
+        // ADMIN MODAL
         document.getElementById('admin-toggle').onclick = () => {
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay';
             overlay.innerHTML = `
                 <div class="modal-content">
+                    <span class="close-btn" onclick="this.closest('.modal-overlay').remove()">×</span>
                     <h2>Admin Login</h2>
                     <input id="admin-pw" type="password" placeholder="Password" autofocus>
                     <button id="admin-submit">Login</button>
@@ -230,9 +262,9 @@
                 </div>`;
             document.body.appendChild(overlay);
 
-            const input = document.getElementById('admin-pw');
-            const submit = document.getElementById('admin-submit');
-            const error = document.getElementById('admin-error');
+            const input = overlay.querySelector('#admin-pw');
+            const submit = overlay.querySelector('#admin-submit');
+            const error = overlay.querySelector('#admin-error');
 
             const tryLogin = () => {
                 if (input.value === ADMIN_PASSWORD) {
@@ -244,10 +276,9 @@
                 }
             };
             submit.onclick = tryLogin;
-            input.onkeydown = e => e.key==='Enter' && tryLogin();
+            input.onkeydown = e => e.key === 'Enter' && tryLogin();
         };
 
-        // Admin render + recurring toggle
         function renderAdminMarkets() {
             const container = document.getElementById('admin-markets');
             container.innerHTML = '';
@@ -275,17 +306,57 @@
             showNotification(val ? "Now repeats daily" : "Daily repeat disabled");
         };
 
-        window.resolveMarket = async (marketId, outcome) => { /* same as before, using showNotification */ };
+        window.resolveMarket = async (marketId, outcome) => {
+            if (!confirm(`Close market with ${outcome.toUpperCase()} winner?`)) return;
 
-        // Create market (same as before)
-        document.getElementById('create-market-btn').onclick = async () => { /* same as before */ };
+            await update(ref(db, `markets/${marketId}`), { status: "closed", outcome, closedAt: Date.now() });
 
-        // Start everything
+            let paid = 0;
+            const usersSnap = await get(ref(db, 'users'));
+            for (const [key, user] of Object.entries(usersSnap.val() || {})) {
+                if (user.bets?.[marketId]) {
+                    const bet = user.bets[marketId];
+                    if (bet.side === outcome && !bet.settled) {
+                        await update(ref(db, `users/${key}`), {
+                            balance: (user.balance || 0) + 100,
+                            [`bets/${marketId}/settled`]: true
+                        });
+                        paid++;
+                    }
+                }
+            }
+            showNotification(`Closed — ${outcome.toUpperCase()} won! Paid 100 pts to ${paid} player(s).`);
+            renderAdminMarkets();
+        };
+
+        document.getElementById('create-market-btn').onclick = async () => {
+            const q = document.getElementById('new-question').value.trim();
+            let yp = parseInt(document.getElementById('new-yesprice').value) || 50;
+            let np = parseInt(document.getElementById('new-noprice').value) || 50;
+            if (!q) return showNotification("Enter a question");
+
+            let max = 0;
+            Object.keys(currentMarkets).forEach(k => { if (k.startsWith('m')) max = Math.max(max, parseInt(k.slice(1)) || 0); });
+            const id = `m${max+1}`;
+
+            await set(ref(db, `markets/${id}`), {
+                question: q,
+                yesPrice: yp,
+                noPrice: np,
+                status: "open",
+                createdAt: Date.now()
+            });
+            showNotification(`Market ${id} created!`);
+            document.getElementById('new-question').value = '';
+            renderAdminMarkets();
+        };
+
+        // START
         (async () => {
             await initPlayer();
             loadMarkets();
             loadLeaderboard();
-            await checkDailyReset();   // ← this runs every load and creates new daily markets
+            await checkDailyReset();
         })();
     </script>
 </body>
