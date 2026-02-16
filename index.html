@@ -9,7 +9,7 @@
         h1 { text-align:center; color:#1a3c6d; margin:10px 0 20px; font-size:2.1rem; }
         .player-info { position:absolute; top:12px; left:12px; font-size:13px; color:#555; background:rgba(255,255,255,0.7); padding:4px 10px; border-radius:6px; }
         .logout-btn { margin-left:10px; font-size:11px; color:#721c24; cursor:pointer; text-decoration:underline; }
-        .mybets-btn { position:absolute; top:12px; right:12px; font-size:13px; padding:6px 12px; background:#007bff; color:white; border:none; border-radius:6px; cursor:pointer; }
+        .mybets-btn { position:absolute; top:12px; right:12px; font-size:11px; padding:4px 8px; background:#007bff; color:white; border:none; border-radius:6px; cursor:pointer; }
         .card { background:white; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,0.1); }
         .price { font-weight:bold; color:#2ecc71; }
         button { padding:14px 20px; font-size:16px; border:none; border-radius:8px; cursor:pointer; width:48%; margin:4px; }
@@ -83,7 +83,7 @@
         let currentPlayerKey = null;
         let currentDisplayName = null;
         let currentMarkets = {};
-        let userBets = {};   // used for gray-out and My Bets
+        let userBets = {};
 
         const ADMIN_PASSWORD = "teacher2026";
 
@@ -244,7 +244,7 @@
             promptLogin();
         };
 
-        // My Bets
+        // My Bets (small button)
         document.getElementById('mybets-btn').onclick = () => {
             if (!currentPlayerKey) return showNotification("Please log in first");
             if (Object.keys(userBets).length === 0) return showNotification("You have no bets yet");
@@ -334,7 +334,7 @@
 
             userBets[marketId] = { side, paid: price };
             showNotification(`Bet placed on ${side.toUpperCase()} for ${price} pts!`);
-            renderMarkets();   // refresh to gray out buttons
+            renderMarkets();
         }
 
         function loadLeaderboard() {
@@ -349,12 +349,169 @@
             });
         }
 
-        // ADMIN (unchanged from working version)
-        document.getElementById('admin-toggle').onclick = () => { /* same createElement admin modal as before */ };
-        function renderAdminMarkets() { /* same as before */ }
-        window.toggleRecurring = async (id, val) => { /* same */ };
-        window.resolveMarket = (marketId, outcome) => { /* same in-page confirm */ };
-        document.getElementById('create-market-btn').onclick = async () => { /* same */ };
+        // ADMIN MODAL
+        document.getElementById('admin-toggle').onclick = () => {
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+
+            const content = document.createElement('div');
+            content.className = 'modal-content';
+
+            const close = document.createElement('span');
+            close.className = 'close-btn';
+            close.textContent = '×';
+            close.onclick = () => overlay.remove();
+
+            const title = document.createElement('h2');
+            title.textContent = 'Admin Login';
+
+            const input = document.createElement('input');
+            input.type = 'password';
+            input.placeholder = 'Password';
+
+            const btn = document.createElement('button');
+            btn.textContent = 'Login';
+
+            const error = document.createElement('p');
+            error.style.color = '#dc3545';
+            error.style.marginTop = '12px';
+
+            content.append(close, title, input, btn, error);
+            overlay.appendChild(content);
+            document.body.appendChild(overlay);
+
+            const forceFocus = () => { input.focus(); input.select(); };
+            setTimeout(forceFocus, 10);
+            setTimeout(forceFocus, 100);
+            setTimeout(forceFocus, 300);
+
+            const tryLogin = () => {
+                if (input.value === ADMIN_PASSWORD) {
+                    overlay.remove();
+                    document.getElementById('admin-panel').style.display = 'block';
+                    renderAdminMarkets();
+                } else {
+                    error.textContent = "Wrong password";
+                    setTimeout(() => error.textContent = '', 2000);
+                }
+            };
+
+            btn.onclick = tryLogin;
+            input.onkeydown = e => { if (e.key === 'Enter') tryLogin(); };
+        };
+
+        function renderAdminMarkets() {
+            const container = document.getElementById('admin-markets');
+            container.innerHTML = '';
+            Object.keys(currentMarkets).forEach(id => {
+                const m = currentMarkets[id];
+                const div = document.createElement('div');
+                div.style.margin = '16px 0'; div.style.padding = '12px'; div.style.background = '#f8f9fa'; div.style.borderRadius = '8px';
+                div.innerHTML = `
+                    <strong>${m.question}</strong><br>
+                    <small>Status: ${m.status} ${m.recurring ? '(daily template)' : ''}</small><br>
+                    <label><input type="checkbox" ${m.recurring?'checked':''} onchange="toggleRecurring('${id}', this.checked)"> Repeat daily</label>
+                    ${m.status === 'open' ? `
+                        <div style="margin-top:12px;">
+                            <button class="resolve-yes" data-id="${id}">YES won</button>
+                            <button class="resolve-no" data-id="${id}">NO won</button>
+                        </div>
+                    ` : ''}
+                `;
+                container.appendChild(div);
+            });
+
+            document.querySelectorAll('.resolve-yes').forEach(btn => {
+                btn.onclick = () => resolveMarket(btn.dataset.id, 'yes');
+            });
+            document.querySelectorAll('.resolve-no').forEach(btn => {
+                btn.onclick = () => resolveMarket(btn.dataset.id, 'no');
+            });
+        }
+
+        window.toggleRecurring = async (id, val) => {
+            await update(ref(db, `markets/${id}`), { recurring: val });
+            showNotification(val ? "Now repeats daily" : "Daily repeat disabled");
+        };
+
+        window.resolveMarket = (marketId, outcome) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+
+            const content = document.createElement('div');
+            content.className = 'modal-content';
+
+            const close = document.createElement('span');
+            close.className = 'close-btn';
+            close.textContent = '×';
+            close.onclick = () => overlay.remove();
+
+            const title = document.createElement('h2');
+            title.textContent = 'Confirm Resolution';
+
+            const msg = document.createElement('p');
+            msg.textContent = `Close this market and declare ${outcome.toUpperCase()} the winner?`;
+
+            const yesBtn = document.createElement('button');
+            yesBtn.textContent = 'Yes, resolve';
+            yesBtn.style.background = '#28a745';
+
+            const noBtn = document.createElement('button');
+            noBtn.textContent = 'Cancel';
+            noBtn.style.background = '#dc3545';
+            noBtn.style.marginTop = '8px';
+
+            content.append(close, title, msg, yesBtn, noBtn);
+            overlay.appendChild(content);
+            document.body.appendChild(overlay);
+
+            yesBtn.onclick = async () => {
+                overlay.remove();
+
+                await update(ref(db, `markets/${marketId}`), { status: "closed", outcome, closedAt: Date.now() });
+
+                let paid = 0;
+                const usersSnap = await get(ref(db, 'users'));
+                for (const [key, user] of Object.entries(usersSnap.val() || {})) {
+                    if (user.bets?.[marketId]) {
+                        const bet = user.bets[marketId];
+                        if (bet.side === outcome && !bet.settled) {
+                            await update(ref(db, `users/${key}`), {
+                                balance: (user.balance || 0) + 100,
+                                [`bets/${marketId}/settled`]: true
+                            });
+                            paid++;
+                        }
+                    }
+                }
+                showNotification(`Closed — ${outcome.toUpperCase()} won! Paid 100 pts to ${paid} player(s).`);
+                renderAdminMarkets();
+            };
+
+            noBtn.onclick = () => overlay.remove();
+        };
+
+        document.getElementById('create-market-btn').onclick = async () => {
+            const q = document.getElementById('new-question').value.trim();
+            let yp = parseInt(document.getElementById('new-yesprice').value) || 50;
+            let np = parseInt(document.getElementById('new-noprice').value) || 50;
+            if (!q) return showNotification("Enter a question");
+
+            let max = 0;
+            Object.keys(currentMarkets).forEach(k => { if (k.startsWith('m')) max = Math.max(max, parseInt(k.slice(1)) || 0); });
+            const id = `m${max+1}`;
+
+            await set(ref(db, `markets/${id}`), {
+                question: q,
+                yesPrice: yp,
+                noPrice: np,
+                status: "open",
+                createdAt: Date.now()
+            });
+            showNotification(`Market ${id} created!`);
+            document.getElementById('new-question').value = '';
+            renderAdminMarkets();
+        };
 
         // START
         (async () => {
