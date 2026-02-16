@@ -35,10 +35,10 @@
         #leaderboard div { background:white; padding:10px; margin-bottom:8px; border-radius:8px; }
         #admin-panel { display:none; margin:30px 0; padding:20px; background:#fff3cd; border:1px solid #ffeeba; border-radius:12px; }
         .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.65); display:flex; align-items:center; justify-content:center; z-index:9999; }
-        .modal-content { background:white; padding:28px; border-radius:12px; width:340px; text-align:center; box-shadow:0 8px 25px rgba(0,0,0,0.3); position:relative; }
+        .modal-content { background:white; padding:28px; border-radius:12px; width:90%; max-width:420px; max-height:90vh; overflow-y:auto; text-align:center; box-shadow:0 8px 25px rgba(0,0,0,0.3); position:relative; }
         .modal-content input { width:100%; padding:12px; font-size:18px; margin:8px 0; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; }
         .modal-content button { width:100%; padding:14px; font-size:18px; background:#007bff; color:white; border:none; border-radius:6px; cursor:pointer; margin-top:8px; }
-        .close-btn { position:absolute; top:10px; right:12px; font-size:28px; cursor:pointer; color:#999; line-height:1; }
+        .close-btn { position:absolute; top:8px; right:12px; font-size:28px; cursor:pointer; color:#999; line-height:1; z-index:10; }
         .notification { position:fixed; top:16px; left:50%; transform:translateX(-50%); background:#333; color:white; padding:12px 24px; border-radius:8px; z-index:10000; max-width:90%; text-align:center; box-shadow:0 4px 12px rgba(0,0,0,0.3); opacity:0; transition:opacity .4s; }
         .notification.show { opacity:1; }
     </style>
@@ -156,6 +156,15 @@
                 document.getElementById('username-display').textContent = nick;
                 document.getElementById('logout-btn').style.display = 'inline';
                 userBets = snap.val().bets || {};
+
+                // Live balance + bets listener (critical for reload)
+                onValue(ref(db, `users/${currentPlayerKey}`), s => {
+                    const data = s.val();
+                    document.getElementById('balance').innerText = data?.balance || 0;
+                    userBets = data?.bets || {};
+                    renderMarkets();
+                });
+
                 return true;
             }
             return false;
@@ -233,6 +242,7 @@
 
                     overlay.remove();
 
+                    // Live listener (ensures points update on load/reload)
                     onValue(userRef, s => {
                         const data = s.val();
                         document.getElementById('balance').innerText = data?.balance || 0;
@@ -265,7 +275,7 @@
 
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay';
-            let html = `<div class="modal-content" style="width:90%; max-width:420px;"><span class="close-btn" onclick="this.closest('.modal-overlay').remove()">×</span><h2>My Bets</h2>`;
+            let html = `<div class="modal-content"><span class="close-btn" onclick="this.closest('.modal-overlay').remove()">×</span><h2>My Bets</h2>`;
 
             Object.keys(userBets).forEach(id => {
                 const m = currentMarkets[id];
@@ -363,6 +373,7 @@
             });
         }
 
+        // ADMIN MODAL
         document.getElementById('admin-toggle').onclick = () => {
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay';
@@ -526,6 +537,7 @@
             renderAdminMarkets();
         };
 
+        // START
         (async () => {
             const auto = await tryAutoLogin();
             if (!auto) await promptLogin();
