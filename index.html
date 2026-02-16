@@ -9,15 +9,30 @@
         h1 { text-align:center; color:#1a3c6d; margin:10px 0 20px; font-size:2.1rem; }
         .player-info { position:absolute; top:12px; left:12px; font-size:13px; color:#555; background:rgba(255,255,255,0.7); padding:4px 10px; border-radius:6px; }
         .logout-btn { margin-left:10px; font-size:11px; color:#721c24; cursor:pointer; text-decoration:underline; }
-        .mybets-btn { position:absolute; top:12px; right:12px; font-size:11px; padding:4px 8px; background:#007bff; color:white; border:none; border-radius:6px; cursor:pointer; }
+        .mybets-btn, #admin-toggle { 
+            position:absolute; 
+            font-size:10px; 
+            padding:3px 6px; 
+            background:#007bff; 
+            color:white; 
+            border:none; 
+            border-radius:4px; 
+            cursor:pointer; 
+            min-width:0; 
+            white-space:nowrap;
+        }
+        .mybets-btn { top:12px; right:12px; }
+        #admin-toggle { bottom:12px; right:12px; background:rgba(51,51,51,0.75); }
         .card { background:white; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,0.1); }
         .price { font-weight:bold; color:#2ecc71; }
-        button { padding:14px 20px; font-size:16px; border:none; border-radius:8px; cursor:pointer; width:48%; margin:4px; }
+        /* General buttons inside markets and admin */
+        #markets-container button, #admin-panel button {
+            padding:14px 20px; font-size:16px; border:none; border-radius:8px; cursor:pointer; width:48%; margin:4px;
+        }
         .btn-yes { background:#d4edda; color:#155724; }
         .btn-no  { background:#f8d7da; color:#721c24; }
         .btn-gray { background:#ddd; color:#666; cursor:not-allowed; }
         #leaderboard div { background:white; padding:10px; margin-bottom:8px; border-radius:8px; }
-        #admin-toggle { position:fixed; bottom:12px; right:12px; font-size:11px; padding:5px 9px; background:rgba(51,51,51,0.75); color:white; border:none; border-radius:6px; cursor:pointer; z-index:100; }
         #admin-panel { display:none; margin:30px 0; padding:20px; background:#fff3cd; border:1px solid #ffeeba; border-radius:12px; }
         .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.65); display:flex; align-items:center; justify-content:center; z-index:9999; }
         .modal-content { background:white; padding:28px; border-radius:12px; width:340px; text-align:center; box-shadow:0 8px 25px rgba(0,0,0,0.3); position:relative; }
@@ -244,7 +259,6 @@
             promptLogin();
         };
 
-        // My Bets (small button)
         document.getElementById('mybets-btn').onclick = () => {
             if (!currentPlayerKey) return showNotification("Please log in first");
             if (Object.keys(userBets).length === 0) return showNotification("You have no bets yet");
@@ -349,7 +363,6 @@
             });
         }
 
-        // ADMIN MODAL
         document.getElementById('admin-toggle').onclick = () => {
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay';
@@ -513,7 +526,6 @@
             renderAdminMarkets();
         };
 
-        // START
         (async () => {
             const auto = await tryAutoLogin();
             if (!auto) await promptLogin();
