@@ -6,7 +6,7 @@
     <title>Stewart Betting Market</title>
     <style>
         body { font-family: system-ui, sans-serif; background: #f0f2f5; margin:0; padding:15px; color:#333; }
-        h1 { text-align:center; color:#1a3c6d; margin:10px 0 20px; font-size:2.1rem; }
+        h1 { text-align:center; color:#1a3c6d; margin:50px 0 20px; font-size:2.1rem; } /* increased top margin */
         .player-info { position:absolute; top:12px; left:12px; font-size:13px; color:#555; background:rgba(255,255,255,0.7); padding:4px 10px; border-radius:6px; }
         .logout-btn { margin-left:10px; font-size:11px; color:#721c24; cursor:pointer; text-decoration:underline; }
         .mybets-btn, #admin-toggle { 
@@ -157,7 +157,7 @@
                 document.getElementById('logout-btn').style.display = 'inline';
                 userBets = snap.val().bets || {};
 
-                // Live balance + bets listener (critical for reload)
+                // Live balance + bets listener (now attached on auto-login too)
                 onValue(ref(db, `users/${currentPlayerKey}`), s => {
                     const data = s.val();
                     document.getElementById('balance').innerText = data?.balance || 0;
@@ -242,7 +242,6 @@
 
                     overlay.remove();
 
-                    // Live listener (ensures points update on load/reload)
                     onValue(userRef, s => {
                         const data = s.val();
                         document.getElementById('balance').innerText = data?.balance || 0;
